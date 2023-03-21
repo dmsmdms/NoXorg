@@ -1,0 +1,79 @@
+# Maintainer: Maksym Siverskyi <dmsmaxsv@gmail.com>
+
+pkgbase="cairo"
+pkgname=("libcairo2" "libcairo2-dev")
+pkgdesc="Cairo 2D vector graphics library"
+pkgurl="https://gitlab.archlinux.org/archlinux/packaging/packages/${pkgbase}/-/raw/main/PKGBUILD?inline=false"
+pkgver="$(wget -O - ${pkgurl} 2> /dev/null | grep pkgver= | cut -d '=' -f 2-)"
+pkgrel=1
+arch=("$(dpkg --print-architecture)")
+makedepends=("gcc" "meson" "pkg-config" "libc6-dev" "libfontconfig-dev" "libfreetype-dev" "libpixman-1-dev" "libpng-dev")
+source=("https://gitlab.freedesktop.org/${pkgbase}/${pkgbase}/-/archive/${pkgver}/${pkgbase}-${pkgver}.tar.gz")
+sha256sums=("SKIP")
+prefix="/usr/local"
+
+build() {
+	cd ${pkgbase}-${pkgver}
+
+	meson setup build \
+	--prefix="${prefix}" \
+	-Ddwrite=disabled \
+	-Dfontconfig=enabled \
+	-Dfreetype=enabled \
+	-Dpng=enabled \
+	-Dquartz=disabled \
+	-Dtee=disabled \
+	-Dxcb=disabled \
+	-Dxlib=disabled \
+	-Dxlib-xcb=disabled \
+	-Dzlib=disabled \
+	-Dtests=disabled \
+	-Dgtk2-utils=disabled \
+	-Dglib=disabled \
+	-Dspectre=disabled \
+	-Dsymbol-lookup=disabled \
+	-Dgtk_doc=false \
+	-Ddebug=false \
+	-Doptimization=3 \
+	-Dbackend_max_links=$(nproc) \
+	-Db_asneeded=true \
+	-Db_lto=true \
+	-Db_lto_threads=$(nproc) \
+	-Db_ndebug=true \
+	-Dc_args="-march=${CPU_NAME}" \
+	-Dcpp_args="-march=${CPU_NAME}" \
+	-Dlibdir="lib"
+
+	meson compile -C build
+}
+
+package_libcairo2() {
+	pkgdesc="Cairo 2D vector graphics library -- runtime"
+	depends=("libc6" "libfontconfig1" "libfreetype6" "libpixman-1-0" "libpng16-16")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libcairo.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libcairo2-dev() {
+	pkgdesc="Cairo 2D vector graphics library -- development files"
+	depends=("libcairo2")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -r "${pkgdir}/tmp/${prefix}/include" "${pkgdir}/${prefix}"
+	cp -r "${pkgdir}/tmp/${prefix}/lib/pkgconfig" "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}

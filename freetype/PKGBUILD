@@ -1,0 +1,70 @@
+# Maintainer: Maksym Siverskyi <dmsmaxsv@gmail.com>
+
+pkgbase="freetype"
+pkgname=("libfreetype6" "libfreetype-dev")
+pkgdesc="FreeType 2 font engine"
+pkgurl="https://gitlab.archlinux.org/archlinux/packaging/packages/${pkgbase}2/-/raw/main/PKGBUILD?inline=false"
+pkgver="$(wget -O - ${pkgurl} 2> /dev/null | grep pkgver= | cut -d '=' -f 2-)"
+pkgrel=1
+arch=("$(dpkg --print-architecture)")
+makedepends=("gcc" "meson" "pkg-config" "libc6-dev")
+source=("https://download-mirror.savannah.gnu.org/releases/${pkgbase}/${pkgbase}-$pkgver.tar.xz")
+sha256sums=("SKIP")
+prefix="/usr/local"
+
+build() {
+	cd ${pkgbase}-${pkgver}
+
+	meson setup build \
+	--prefix="${prefix}" \
+	-Dbrotli=disabled \
+	-Dbzip2=disabled \
+	-Dharfbuzz=disabled \
+	-Dmmap=enabled \
+	-Dpng=disabled \
+	-Dtests=disabled \
+	-Dzlib=disabled \
+	-Ddebug=false \
+	-Doptimization=3 \
+	-Dbackend_max_links=$(nproc) \
+	-Db_asneeded=true \
+	-Db_lto=true \
+	-Db_lto_threads=$(nproc) \
+	-Db_ndebug=true \
+	-Dc_args="-march=${CPU_NAME}" \
+	-Dcpp_args="-march=${CPU_NAME}" \
+	-Dlibdir="lib"
+
+	meson compile -C build
+}
+
+package_libfreetype6() {
+	pkgdesc="FreeType 2 font engine -- runtime"
+	depends=("libc6")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libfreetype.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libfreetype-dev() {
+	pkgdesc="FreeType 2 font engine -- development files"
+	depends=("libfreetype6")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -r "${pkgdir}/tmp/${prefix}/include" "${pkgdir}/${prefix}"
+	cp -r "${pkgdir}/tmp/${prefix}/lib/pkgconfig" "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}

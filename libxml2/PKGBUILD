@@ -1,0 +1,88 @@
+# Maintainer: Maksym Siverskyi <dmsmaxsv@gmail.com>
+
+pkgbase="libxml2"
+pkgname=("libxml2" "libxml2-dev")
+pkgdesc="GNOME XML library"
+pkgurl="https://gitlab.archlinux.org/archlinux/packaging/packages/${pkgbase}/-/raw/main/PKGBUILD?inline=false"
+pkgver="$(wget -O - ${pkgurl} 2> /dev/null | grep pkgver= | cut -d '=' -f 2-)"
+pkgrel=1
+arch=("$(dpkg --print-architecture)")
+makedepends=("gcc" "make" "autoconf" "automake" "libtool" "libc6-dev")
+source=("https://gitlab.gnome.org/GNOME/${pkgbase}/-/archive/v${pkgver}/${pkgbase}-v${pkgver}.tar.gz")
+sha256sums=("SKIP")
+prefix="/usr/local"
+
+build() {
+	cd ${pkgbase}-v${pkgver}
+
+	export CFLAGS="-DNDEBUG -O3 -march=${CPU_NAME} -flto"
+	export CXXFLAGS="${CFLAGS}"
+	export LDFLAGS="-flto"
+	export DSOFLAGS="${LDFLAGS}"
+
+	NOCONFIGURE=1 ./autogen.sh
+
+	./configure \
+	--prefix="${prefix}" \
+	--libdir="${prefix}/lib" \
+	--disable-ipv6 \
+	--without-c14n \
+	--without-catalog \
+	--without-debug \
+	--without-html \
+	--without-http \
+	--without-iconv \
+	--without-iso8859x \
+	--without-output \
+	--without-pattern \
+	--without-push \
+	--without-python \
+	--with-reader \
+	--without-regexps \
+	--without-sax1 \
+	--without-schemas \
+	--without-schematron \
+	--without-threads \
+	--without-tree \
+	--without-valid \
+	--with-writer \
+	--without-xinclude \
+	--without-xpath \
+	--without-xptr \
+	--without-modules \
+	--without-zlib \
+	--without-lzma
+
+	make -j $(nproc)
+}
+
+package_libxml2() {
+	pkgdesc="GNOME XML library -- runtime"
+	depends=("libc6")
+
+	cd ${pkgbase}-v${pkgver}
+
+	mkdir -p "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	make DESTDIR="${pkgdir}/tmp" install
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libxml2.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libxml2-dev() {
+	pkgdesc="GNOME XML library -- development files"
+	depends=("libxml2")
+
+	cd ${pkgbase}-v${pkgver}
+
+	mkdir -p "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	make DESTDIR="${pkgdir}/tmp" install
+	cp -r "${pkgdir}/tmp/${prefix}/include" "${pkgdir}/${prefix}"
+	cp -r "${pkgdir}/tmp/${prefix}/lib/pkgconfig" "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}

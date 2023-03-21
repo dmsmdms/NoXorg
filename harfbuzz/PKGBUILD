@@ -1,0 +1,81 @@
+# Maintainer: Maksym Siverskyi <dmsmaxsv@gmail.com>
+
+pkgbase="harfbuzz"
+pkgname=("libharfbuzz0b" "libharfbuzz-dev")
+pkgdesc="OpenType text shaping engine"
+pkgurl="https://gitlab.archlinux.org/archlinux/packaging/packages/${pkgbase}/-/raw/main/PKGBUILD?inline=false"
+pkgver="$(wget -O - ${pkgurl} 2> /dev/null | grep pkgver= | cut -d '=' -f 2-)"
+pkgrel=1
+arch=("$(dpkg --print-architecture)")
+makedepends=("gcc" "meson" "pkg-config" "libc6-dev")
+source=("https://github.com/${pkgbase}/${pkgbase}/archive/refs/tags/${pkgver}.tar.gz")
+sha256sums=("SKIP")
+prefix="/usr/local"
+
+build() {
+	cd ${pkgbase}-${pkgver}
+
+	meson setup build \
+	--prefix="${prefix}" \
+	-Dcairo=disabled \
+	-Dcoretext=disabled \
+	-Ddirectwrite=disabled \
+	-Ddoc_tests=false \
+	-Ddocs=disabled \
+	-Dexperimental_api=false \
+	-Dfreetype=enabled \
+	-Dgdi=disabled \
+	-Dglib=disabled \
+	-Dgobject=disabled \
+	-Dgraphite=disabled \
+	-Dgraphite2=disabled \
+	-Dicu=disabled \
+	-Dicu_builtin=false \
+	-Dintrospection=disabled \
+	-Dragel_subproject=false \
+	-Dtests=disabled \
+	-Dutilities=disabled \
+	-Ddebug=false \
+	-Doptimization=3 \
+	-Dbackend_max_links=$(nproc) \
+	-Db_asneeded=true \
+	-Db_lto=true \
+	-Db_lto_threads=$(nproc) \
+	-Db_ndebug=true \
+	-Dc_args="-march=${CPU_NAME}" \
+	-Dcpp_args="-march=${CPU_NAME}" \
+	-Dlibdir="lib"
+
+	meson compile -C build
+}
+
+package_libharfbuzz0b() {
+	pkgdesc="OpenType text shaping engine -- runtime"
+	depends=("libc6")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libharfbuzz.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libharfbuzz-dev() {
+	pkgdesc="OpenType text shaping engine -- development files"
+	depends=("libharfbuzz0b")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -r "${pkgdir}/tmp/${prefix}/include" "${pkgdir}/${prefix}"
+	cp -r "${pkgdir}/tmp/${prefix}/lib/pkgconfig" "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}

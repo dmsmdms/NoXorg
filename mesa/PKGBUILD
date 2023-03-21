@@ -1,0 +1,275 @@
+# Maintainer: Maksym Siverskyi <dmsmaxsv@gmail.com>
+
+pkgbase="mesa"
+pkgname=("libglapi-mesa" "libgl1-mesa-dri" "libgl1-mesa-dev" "libgbm1" "libgbm-dev"
+		 "libegl1" "libegl-dev" "libgles2" "libgles-dev" "mesa-vulkan-drivers")
+pkgdesc="Free implementation of the graphics API"
+pkgurl="https://gitlab.archlinux.org/archlinux/packaging/packages/${pkgbase}/-/raw/main/PKGBUILD?inline=false"
+pkgver="$(wget -O - ${pkgurl} 2> /dev/null | grep pkgver= | cut -d '=' -f 2-)"
+pkgrel=1
+arch=("$(dpkg --print-architecture)")
+makedepends=("gcc" "g++" "meson" "pkg-config" "python3-mako" "glslang-tools" "byacc" "flex"
+			 "wayland-protocols" "libwayland-dev" "libwayland-egl-backend-dev" "libsensors-dev"
+			 "libvulkan-dev" "zlib1g-dev")
+source=("https://mesa.freedesktop.org/archive/${pkgbase}-${pkgver}.tar.xz")
+sha256sums=("SKIP")
+prefix="/usr/local"
+
+# See https://www.intel.com/content/www/us/en/developer/articles/guide/intel-graphics-developers-guides.html
+
+if [[ "$GPU" == "intel-iris" ]]; then
+	dri="iris"
+	vulkan="intel"
+elif [[ "$GPU" == "intel-gen7+" ]]; then
+	dri="i915"
+	vulkan="intel_hasvk"
+fi
+
+build() {
+	cd ${pkgbase}-${pkgver}
+
+	meson setup build \
+	--prefix="${prefix}" \
+	-Dallow-kcmp=enabled \
+	-Dplatforms=wayland \
+	-Degl-native-platform=wayland \
+	-Dandroid-libbacktrace=disabled \
+	-Dandroid-stub=false \
+	-Ddri3=enabled \
+	-Dgallium-drivers="$dri" \
+	-Dgallium-vdpau=disabled \
+	-Dgallium-omx=disabled \
+	-Dgallium-va=disabled \
+	-Dgallium-xa=disabled \
+	-Dgallium-nine=false \
+	-Dgallium-d3d10umd=false \
+	-Dgallium-opencl=disabled \
+	-Dgallium-rusticl=false \
+	-Dopencl-spirv=false \
+	-Dvulkan-drivers="$vulkan" \
+	-Dimagination-srv=false \
+	-Dshader-cache=enabled \
+	-Dshader-cache-default=true \
+	-Dshared-glapi=enabled \
+	-Dgles1=disabled \
+	-Dgles2=enabled \
+	-Dopengl=true \
+	-Dgbm=enabled \
+	-Dglx=disabled \
+	-Degl=enabled \
+	-Dglvnd=false \
+	-Dmicrosoft-clc=disabled \
+	-Dspirv-to-dxil=false \
+	-Dglx-read-only-text=false \
+	-Dllvm=disabled \
+	-Dshared-llvm=disabled \
+	-Ddraw-use-llvm=false \
+	-Dvalgrind=disabled \
+	-Dlibunwind=disabled \
+	-Dlmsensors=enabled \
+	-Dbuild-tests=false \
+	-Denable-glcpp-tests=false \
+	-Dbuild-aco-tests=false \
+	-Dinstall-intel-gpu-tests=false \
+	-Dselinux=false \
+	-Dosmesa=false \
+	-Dtools=[] \
+	-Dpower8=disabled \
+	-Dxlib-lease=disabled \
+	-Dglx-direct=true \
+	-Dzstd=disabled \
+	-Dzlib=enabled \
+	-Dsse2=true \
+	-Dperfetto=false \
+	-Dvmware-mks-stats=false \
+	-Dvulkan-beta=false \
+	-Dintel-clc=disabled \
+	-Dvideo-codecs=[] \
+	-Dgallium-d3d12-video=disabled \
+	-Dxmlconfig=disabled \
+	-Dexpat=disabled \
+	-Ddebug=false \
+	-Doptimization=3 \
+	-Dbackend_max_links=$(nproc) \
+	-Db_asneeded=true \
+	-Db_lto=true \
+	-Db_lto_threads=$(nproc) \
+	-Db_ndebug=true \
+	-Dc_args="-march=${CPU_NAME}" \
+	-Dcpp_args="-march=${CPU_NAME}" \
+	-Dlibdir="lib"
+
+	meson compile -C build
+}
+
+package_libglapi-mesa() {
+	pkgdesc="Free implementation of the OpenGL API -- shared library"
+	depends=("libc6")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libglapi.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libgl1-mesa-dri() {
+	pkgdesc="Free implementation of the OpenGL API -- DRI modules"
+	depends=("libc6" "libstdc++6" "libdrm2" "libglapi-mesa" "libsensors5" "zlib1g")
+
+	if [[ "${GPU_DRIVER}" == "intel" ]]; then
+		depends+=("libdrm-intel1")
+	fi
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib/dri"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp "${pkgdir}/tmp/${prefix}/lib/dri/${dri}_dri.so" "${pkgdir}/${prefix}/lib/dri"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libgl1-mesa-dev() {
+	pkgdesc="Free implementation of the OpenGL API -- development files"
+	depends=("libgl1-mesa-dri")
+
+	if [[ "${GPU_DRIVER}" == "intel" ]]; then
+		depends+=("libdrm-intel1")
+	fi
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/include"
+	mkdir -p "${pkgdir}/${prefix}/lib/pkgconfig"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -r "${pkgdir}/tmp/${prefix}/include/GL" "${pkgdir}/${prefix}/include"
+	cp "${pkgdir}/tmp/${prefix}/lib/pkgconfig/dri.pc" "${pkgdir}/${prefix}/lib/pkgconfig"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libgbm1() {
+	pkgdesc="Generic buffer management API -- runtime"
+	depends=("libc6" "libdrm2" "libwayland-server0")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libgbm.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libgbm-dev() {
+	pkgdesc="Generic buffer management API -- development files"
+	depends=("libgbm1")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/include"
+	mkdir -p "${pkgdir}/${prefix}/lib/pkgconfig"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp "${pkgdir}/tmp/${prefix}/include/gbm.h" "${pkgdir}/${prefix}/include"
+	cp "${pkgdir}/tmp/${prefix}/lib/pkgconfig/gbm.pc" "${pkgdir}/${prefix}/lib/pkgconfig"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libegl1() {
+	pkgdesc="Free implementation of the EGL API -- runtime"
+	depends=("libc6" "libdrm2" "libglapi-mesa" "libgbm1" "libwayland-server0" "libwayland-client0")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libEGL.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libegl-dev() {
+	pkgdesc="Free implementation of the EGL API -- development files"
+	depends=("libegl1")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/include"
+	mkdir -p "${pkgdir}/${prefix}/lib/pkgconfig"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -r "${pkgdir}/tmp/${prefix}/include/EGL" "${pkgdir}/${prefix}/include"
+	cp "${pkgdir}/tmp/${prefix}/lib/pkgconfig/egl.pc" "${pkgdir}/${prefix}/lib/pkgconfig"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libgles2() {
+	pkgdesc="Free implementation of the OpenGL API -- GLESv2 runtime"
+	depends=("libc6" "libglapi-mesa")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libGLESv2.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libgles-dev() {
+	pkgdesc="Free implementation of the OpenGL API -- GLES development files"
+	depends=("libgles2")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/include"
+	mkdir -p "${pkgdir}/${prefix}/lib/pkgconfig"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -r ${pkgdir}/tmp/${prefix}/include/GLES*/ "${pkgdir}/${prefix}/include"
+	cp "${pkgdir}/tmp/${prefix}/lib/pkgconfig/glesv2.pc" "${pkgdir}/${prefix}/lib/pkgconfig"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_mesa-vulkan-drivers() {
+	pkgdesc="Mesa Vulkan graphics drivers -- runtime"
+	depends=("libc6" "libstdc++6" "libdrm2" "libvulkan1" "libwayland-client0" "zlib1g")
+
+	if [[ "${GPU_DRIVER}" == "intel" ]]; then
+		depends+=("libdrm-intel1")
+	fi
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+	mkdir -p "${pkgdir}/${prefix}/share/vulkan/icd.d"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libvulkan_${vulkan}.so* "${pkgdir}/${prefix}/lib"
+	cp ${pkgdir}/tmp/${prefix}/share/vulkan/icd.d/${vulkan}_icd.*.json "${pkgdir}/${prefix}/share/vulkan/icd.d"
+
+	rm -r "${pkgdir}/tmp"
+}

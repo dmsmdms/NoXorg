@@ -1,0 +1,107 @@
+# Maintainer: Maksym Siverskyi <dmsmaxsv@gmail.com>
+
+pkgbase="glib"
+pkgname=("libglib2.0-0" "libglib2.0-dev" "libglib2.0-dev-bin")
+pkgdesc="GLib library of C routines"
+pkgurl="https://gitlab.archlinux.org/archlinux/packaging/packages/${pkgbase}2/-/raw/main/PKGBUILD?inline=false"
+pkgver="$(wget -O - ${pkgurl} 2> /dev/null | grep pkgver= | cut -d '=' -f 2-)"
+pkgrel=1
+arch=("$(dpkg --print-architecture)")
+makedepends=("gcc" "g++" "meson" "pkg-config" "libc6-dev" "libpcre2-dev")
+source=("https://gitlab.gnome.org/GNOME/${pkgbase}/-/archive/${pkgver}/${pkgbase}-${pkgver}.tar.gz"
+		"https://gitlab.gnome.org/GNOME/gvdb/-/archive/main/gvdb-main.tar.gz")
+sha256sums=("SKIP" "SKIP")
+prefix="/usr/local"
+
+prepare() {
+	cp -r gvdb-main/* "${pkgbase}-${pkgver}/subprojects/gvdb"
+}
+
+build() {
+	cd ${pkgbase}-${pkgver}
+
+	meson setup build \
+	--prefix="${prefix}" \
+	-Dbsymbolic_functions=false \
+	-Ddtrace=false \
+	-Dglib_assert=false \
+	-Dglib_checks=false \
+	-Dglib_debug=disabled \
+	-Dgtk_doc=false \
+	-Dinstalled_tests=false \
+	-Dlibelf=disabled \
+	-Dlibmount=disabled \
+	-Dman=false \
+	-Dmultiarch=false \
+	-Dnls=disabled \
+	-Doss_fuzz=disabled \
+	-Dselinux=disabled \
+	-Dsysprof=disabled \
+	-Dsystemtap=false \
+	-Dtests=false \
+	-Dxattr=false \
+	-Ddebug=false \
+	-Doptimization=3 \
+	-Dbackend_max_links=$(nproc) \
+	-Db_asneeded=true \
+	-Db_lto=true \
+	-Db_lto_threads=$(nproc) \
+	-Db_ndebug=true \
+	-Dc_args="-march=${CPU_NAME}" \
+	-Dcpp_args="-march=${CPU_NAME}" \
+	-Dlibdir="lib" \
+	-Dgvdb:default_library=static
+
+	meson compile -C build
+}
+
+package_libglib2.0-0() {
+	pkgdesc="GLib library of C routines -- runtime"
+	depends=("libc6" "libpcre2-8-0")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libgio-2.0.so* "${pkgdir}/${prefix}/lib"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libglib-2.0.so* "${pkgdir}/${prefix}/lib"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libgmodule-2.0.so* "${pkgdir}/${prefix}/lib"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libgobject-2.0.so* "${pkgdir}/${prefix}/lib"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libgthread-2.0.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libglib2.0-dev() {
+	pkgdesc="GLib library of C routines -- development files"
+	depends=("libglib2.0-0")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -r "${pkgdir}/tmp/${prefix}/include" "${pkgdir}/${prefix}"
+	cp -r "${pkgdir}/tmp/${prefix}/lib/pkgconfig" "${pkgdir}/${prefix}/lib"
+	cp -r "${pkgdir}/tmp/${prefix}/lib/glib-2.0" "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libglib2.0-dev-bin() {
+	pkgdesc="GLib library of C routines -- development utilities"
+	depends=("libc6" "libglib2.0-0")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -r "${pkgdir}/tmp/${prefix}/bin" "${pkgdir}/${prefix}"
+
+	rm -r "${pkgdir}/tmp"
+}

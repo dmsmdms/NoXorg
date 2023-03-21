@@ -1,0 +1,109 @@
+# Maintainer: Maksym Siverskyi <dmsmaxsv@gmail.com>
+
+pkgbase="libdrm"
+pkgname=("libdrm2" "libdrm-dev")
+pkgdesc="Userspace interface to kernel DRM services"
+pkgurl="https://gitlab.archlinux.org/archlinux/packaging/packages/${pkgbase}/-/raw/main/PKGBUILD?inline=false"
+pkgver="$(wget -O - ${pkgurl} 2> /dev/null | grep pkgver= | cut -d '=' -f 2-)"
+pkgrel=1
+arch=("$(dpkg --print-architecture)")
+makedepends=("gcc" "meson" "pkg-config" "libc6-dev")
+source=("https://dri.freedesktop.org/${pkgbase}/${pkgbase}-${pkgver}.tar.xz")
+sha256sums=("SKIP")
+prefix="/usr/local"
+
+if [[ "${GPU_DRIVER}" == "intel" ]]; then
+	pkgname+=("libdrm-intel1")
+	makedepends+=("libpciaccess-dev")
+fi
+
+build() {
+	cd ${pkgbase}-${pkgver}
+
+	meson setup build \
+	--prefix="${prefix}" \
+	-Damdgpu=disabled \
+	-Dcairo-tests=disabled \
+	-Detnaviv=disabled \
+	-Dexynos=disabled \
+	-Dfreedreno=disabled \
+	-Dfreedreno-kgsl=false \
+	-Dinstall-test-programs=false \
+	-Dintel=disabled \
+	-Dman-pages=disabled \
+	-Dnouveau=disabled \
+	-Domap=disabled \
+	-Dradeon=disabled \
+	-Dtegra=disabled \
+	-Dtests=false \
+	-Dudev=false \
+	-Dvalgrind=disabled \
+	-Dvc4=disabled \
+	-Dvmwgfx=disabled \
+	-Ddebug=false \
+	-Doptimization=3 \
+	-Dbackend_max_links=$(nproc) \
+	-Db_asneeded=true \
+	-Db_lto=true \
+	-Db_lto_threads=$(nproc) \
+	-Db_ndebug=true \
+	-Dc_args="-march=${CPU_NAME}" \
+	-Dcpp_args="-march=${CPU_NAME}" \
+	-Dlibdir="lib"
+
+	if [[ "${GPU_DRIVER}" == "intel" ]]; then
+		meson configure build -Dintel=enabled
+	fi
+
+	meson compile -C build
+}
+
+package_libdrm2() {
+	pkgdesc="Userspace interface to kernel DRM services -- runtime"
+	depends=("libc6")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libdrm.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libdrm-intel1() {
+	pkgdesc="Userspace interface to intel-specific kernel DRM services -- runtime"
+	depends=("libc6" "libdrm2" "libpciaccess0")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libdrm_intel.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libdrm-dev() {
+	pkgdesc="Userspace interface to kernel DRM services -- development files"
+	depends=("libdrm2")
+
+	if [[ "${GPU_DRIVER}" == "intel" ]]; then
+		depends+=("libdrm-intel1")
+	fi
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -r "${pkgdir}/tmp/${prefix}/include" "${pkgdir}/${prefix}"
+	cp -r "${pkgdir}/tmp/${prefix}/lib/pkgconfig" "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}

@@ -1,0 +1,87 @@
+# Maintainer: Maksym Siverskyi <dmsmaxsv@gmail.com>
+
+pkgbase="pango"
+pkgname=("libpango-1.0-0" "libpangocairo-1.0-0" "libpango1.0-dev")
+pkgdesc="Layout and rendering of internationalized text"
+pkgurl="https://gitlab.archlinux.org/archlinux/packaging/packages/${pkgbase}/-/raw/main/PKGBUILD?inline=false"
+pkgver="$(wget -O - ${pkgurl} 2> /dev/null | grep pkgver= | cut -d '=' -f 2-)"
+pkgrel=1
+arch=("$(dpkg --print-architecture)")
+makedepends=("gcc" "meson" "pkg-config" "libc6-dev" "libfribidi-dev" "libglib2.0-dev")
+source=("https://download.gnome.org/sources/${pkgbase}/${pkgver%.*}/${pkgbase}-${pkgver}.tar.xz")
+sha256sums=("SKIP")
+prefix="/usr/local"
+
+build() {
+	cd ${pkgbase}-${pkgver}
+
+	meson setup build \
+	--prefix="${prefix}" \
+	-Dcairo=enabled \
+	-Dfontconfig=enabled \
+	-Dfreetype=enabled \
+	-Dgtk_doc=false \
+	-Dinstall-tests=false \
+	-Dintrospection=disabled \
+	-Dlibthai=disabled \
+	-Dsysprof=disabled \
+	-Dxft=disabled \
+	-Ddebug=false \
+	-Doptimization=3 \
+	-Dbackend_max_links=$(nproc) \
+	-Db_asneeded=true \
+	-Db_lto=true \
+	-Db_lto_threads=$(nproc) \
+	-Db_ndebug=true \
+	-Dc_args="-march=${CPU_NAME}" \
+	-Dcpp_args="-march=${CPU_NAME}" \
+	-Dlibdir="lib"
+
+	meson compile -C build
+}
+
+package_libpango-1.0-0() {
+	pkgdesc="Layout and rendering of internationalized text -- runtime"
+	depends=("libc6")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libpango-1.0.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libpangocairo-1.0-0() {
+	pkgdesc="Layout and rendering of internationalized text -- cairo libraries"
+	depends=("libc6" "libcairo2")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -P ${pkgdir}/tmp/${prefix}/lib/libpangocairo-1.0.so* "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}
+
+package_libpango1.0-dev() {
+	pkgdesc="Layout and rendering of internationalized text -- development files"
+	depends=("libpango-1.0-0" "libpangocairo-1.0-0" "libcairo2-dev")
+
+	cd ${pkgbase}-${pkgver}
+
+	mkdir "${pkgdir}/tmp"
+	mkdir -p "${pkgdir}/${prefix}/lib"
+
+	meson install -C build --destdir "${pkgdir}/tmp"
+	cp -r "${pkgdir}/tmp/${prefix}/include" "${pkgdir}/${prefix}"
+	cp -r "${pkgdir}/tmp/${prefix}/lib/pkgconfig" "${pkgdir}/${prefix}/lib"
+
+	rm -r "${pkgdir}/tmp"
+}

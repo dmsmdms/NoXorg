@@ -1,0 +1,52 @@
+# Maintainer: Maksym Siverskyi <dmsmaxsv@gmail.com>
+
+pkgbase="cups"
+pkgname=("libcups2" "libcups2-dev")
+pkgdesc="Common UNIX Printing System(tm)"
+pkgurl="https://gitlab.archlinux.org/archlinux/packaging/packages/${pkgbase}/-/raw/main/PKGBUILD?inline=false"
+pkgver="$(wget -O - ${pkgurl} 2> /dev/null | grep pkgver= | cut -d '=' -f 2-)"
+pkgrel=1
+arch=("$(dpkg --print-architecture)")
+makedepends=("gcc" "make" "libc6-dev")
+source=("https://github.com/OpenPrinting/${pkgbase}/releases/download/v${pkgver}/${pkgbase}-${pkgver}-source.tar.gz")
+sha256sums=("SKIP")
+prefix="/usr/local"
+
+build() {
+	cd ${pkgbase}-${pkgver}
+
+	export CFLAGS="-DNDEBUG -O3 -march=${CPU_NAME} -flto"
+	export CXXFLAGS="${CFLAGS}"
+	export LDFLAGS="-flto"
+	export DSOFLAGS="${LDFLAGS}"
+
+	./configure \
+	--prefix="${prefix}" \
+	--libdir="${prefix}/lib" \
+	--with-components=libcups \
+	--without-tls
+
+	make -j $(nproc)
+}
+
+package_libcups2() {
+	pkgdesc="Common UNIX Printing System(tm) - Core library"
+	depends=("libc6")
+
+	cd ${pkgbase}-${pkgver}
+
+	make BUILDROOT="${pkgdir}" install-libs
+}
+
+package_libcups2-dev() {
+	pkgdesc="Common UNIX Printing System(tm) - Development files CUPS library"
+	depends=("libcups2")
+
+	cd ${pkgbase}-${pkgver}
+
+	make BUILDROOT="${pkgdir}" install-headers install-data
+
+	rm -r "${pkgdir}/${prefix}/bin"
+	rm -r "${pkgdir}/${prefix}/share"
+}
+
